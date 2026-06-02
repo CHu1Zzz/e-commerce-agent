@@ -1,5 +1,6 @@
 """Streamlit 界面 — 电商客服 Agent UI（生产级配置）"""
 
+import logging
 import os
 import sys
 import subprocess
@@ -14,6 +15,10 @@ from dotenv import load_dotenv
 
 from app.agent.agent import create_agent, chat
 
+# 配置项目级 logger
+_logger = logging.getLogger("app.ui")
+_logger.setLevel(logging.INFO)
+
 # 加载 .env 文件
 load_dotenv()
 
@@ -27,30 +32,33 @@ def init_session_state():
 
 
 def render_chat_message(role: str, content: str):
-    """渲染单条聊天消息"""
+    """渲染单条聊天消息（XSS 安全：过滤 javascript:/data: URI）"""
+    # 过滤危险 URI，防止钓鱼/数据外泄
+    safe_content = content.replace("javascript:", "⚠️java⚠️:").replace("data:", "⚠️data⚠️:")
     if role == "user":
         with st.chat_message("user", avatar="🧑"):
-            st.markdown(content)
+            st.text(safe_content)  # 用户输入用 text() 渲染，完全不解析 HTML/MD
     else:
         with st.chat_message("assistant", avatar="🤖"):
-            st.markdown(content)
+            st.markdown(safe_content)  # 助手内容用 markdown（已禁用 unsafe_allow_html）
 
 
 def build_agent(api_key: str, base_url: str, model: str, enable_langsmith: bool):
     """根据配置构建 Agent"""
-    if not api_key or api_key == "your-key-here":
+    if not api_key or not api_key.strip():
         return None, "请先在左侧边栏输入你的 MiniMax API Key"
     try:
         agent = create_agent(
             api_key=api_key,
-            base_url=base_url,
+            base_url=base_url if base_url.strip() else None,
             model=model,
             enable_checkpointer=True,
             enable_langsmith=enable_langsmith,
         )
         return agent, None
     except Exception as e:
-        return None, str(e)
+        _logger.exception("Agent build failed")
+        return None, "Agent 初始化失败，请检查配置后重试"
 
 
 def check_vector_db_status() -> tuple[bool, str]:
@@ -71,21 +79,31 @@ def check_vector_db_status() -> tuple[bool, str]:
 
 
 def run_init_vector_db():
-    """运行向量库初始化脚本"""
+    """运行向量库初始化脚本（安全：仅传递必要的环境变量）"""
     try:
+        # 仅传递必要的环境变量，防止恶意变量注入
+        safe_env = {
+            "PATH": os.environ.get("PATH", ""),
+            "PYTHONPATH": str(PROJECT_ROOT),
+            "MINIMAX_API_KEY": os.getenv("MINIMAX_API_KEY", ""),
+            "MINIMAX_BASE_URL": os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat/v1"),
+        }
         result = subprocess.run(
             [sys.executable, str(PROJECT_ROOT / "scripts" / "init_vector_db.py")],
             capture_output=True,
             text=True,
             timeout=120,
-            env={**os.environ, "PYTHONPATH": str(PROJECT_ROOT)},
+            env=safe_env,
         )
         if result.returncode == 0:
             return True, "初始化成功！"
         else:
-            return False, f"初始化失败：{result.stderr[:200]}"
+            # stderr 可能含内部路径，只记录不展示
+            _logger.error("init_vector_db failed: %s", result.stderr[:200])
+            return False, "初始化失败，请稍后重试"
     except Exception as e:
-        return False, f"执行出错：{e}"
+        _logger.exception("init_vector_db subprocess error")
+        return False, "执行出错，请稍后再试"
 
 
 def main():
@@ -150,7 +168,8 @@ def main():
         st.markdown("---")
 
         # --- 3. 连接按钮 ---
-        if api_key and api_key != "your-key-here":
+        api_key_set = bool(api_key and api_key.strip())
+        if api_key_set:
             if st.button("🚀 连接 Agent", use_container_width=True, type="primary"):
                 agent, err = build_agent(api_key, base_url, model, enable_langsmith)
                 if err:
@@ -230,8 +249,9 @@ def main():
         with st.spinner("小帮正在思考..."):
             try:
                 reply = chat(st.session_state.agent, user_input)
-            except Exception as e:
-                reply = f"抱歉，出了点问题：{e}\n请稍后再试，或输入「转人工」联系客服。"
+            except Exception:
+                _logger.exception("Chat failed for user input")
+                reply = "抱歉，出了点问题，请稍后再试，或输入「转人工」联系客服。"
 
         render_chat_message("assistant", reply)
         st.session_state.chat_history.append({"role": "assistant", "content": reply})

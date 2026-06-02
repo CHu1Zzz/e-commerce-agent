@@ -2,19 +2,20 @@
 
 功能：
 - PII 脱敏（输入层）
-- Prompt Injection 检测（输入层）
+- Prompt Injection 检测（输入层，检测到即阻断）
 - LangGraph Checkpointer 状态持久化
 - RAG Tool（商品知识库）
 - 幻觉检测（输出层）
 - LangSmith 可观测性（可选）
 """
 
+import logging
 import os
 import re
 from typing import Optional
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 from langgraph.checkpoint.memory import MemorySaver
 
@@ -24,13 +25,28 @@ from app.agent.tools.logistics import track_logistics
 from app.agent.tools.return_request import submit_return_request
 from app.agent.tools.human_handoff import transfer_to_human
 from app.agent.tools.product_kb import product_kb_search
-from app.security.pii_scrubber import redact_pii, PIIScrubber
+from app.security.pii_scrubber import PIIScrubber
 from app.security.prompt_injection_detector import check_injection, sanitize_input
+
+# 安全专用 logger，禁止使用 print()
+_security_logger = logging.getLogger("app.security")
+_security_logger.setLevel(logging.WARNING)
+_handler = logging.StreamHandler()
+_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
+_security_logger.addHandler(_handler)
+
+# thread_id 验证：仅允许字母数字下划线，长度 1-64
+_THREAD_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
+def _sanitize_log_string(text: str) -> str:
+    """移除控制字符（防日志注入）"""
+    return text.replace("\n", "\\n").replace("\r", "\\r").replace("\x00", "")
 
 
 def create_agent(
     api_key: str,
-    base_url: str = "https://api.minimax.chat/v1",
+    base_url: Optional[str] = None,
     model: str = "MiniMax-Text-01",
     enable_checkpointer: bool = True,
     enable_langsmith: bool = False,
@@ -39,7 +55,7 @@ def create_agent(
 
     Args:
         api_key: MiniMax API Key
-        base_url: MiniMax API 地址（OpenAI 兼容接口）
+        base_url: MiniMax API 地址，默认从环境变量 MINIMAX_BASE_URL 读取
         model: 模型名称
         enable_checkpointer: 是否启用状态持久化（断线重连）
         enable_langsmith: 是否启用 LangSmith tracing
@@ -47,6 +63,9 @@ def create_agent(
     Returns:
         LangGraph ReAct Agent 实例（已配置 checkpointer）
     """
+    if base_url is None:
+        base_url = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat/v1")
+
     # ===== 1. LLM 初始化 =====
     llm = ChatOpenAI(
         model=model,
@@ -60,7 +79,9 @@ def create_agent(
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY")
         os.environ["LANGCHAIN_PROJECT"] = "ecommerce-cs-agent"
-        os.environ["LANGCHAIN_ENDPOINT"] = "https://api.smith.langchain.com"
+        os.environ["LANGCHAIN_ENDPOINT"] = os.getenv(
+            "LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"
+        )
 
     # ===== 3. 注册所有 Tool =====
     tools = [
@@ -87,30 +108,40 @@ def create_agent(
 
 
 def preprocess_input(user_input: str) -> tuple[str, Optional[str]]:
-    """对用户输入进行预处理：PII 脱敏 + Injection 检测
+    """对用户输入进行预处理：Prompt Injection 阻断 + PII 脱敏
 
     Returns:
         (safe_input, warning_message)
         - safe_input: 处理后的安全输入
-        - warning_message: 如果检测到问题，返回警告信息（可选）
+        - warning_message: 如果检测到 PII 脱敏，返回警告信息（可选）
+
+    Raises:
+        ValueError: 当检测到 Prompt Injection 攻击时直接拒绝
     """
     warning = None
 
-    # Step 1: Prompt Injection 检测
+    # Step 1: Prompt Injection 检测 — 检测到即阻断，不放行
     is_safe, reason = check_injection(user_input)
     if not is_safe:
-        # 清洗输入，移除 injection 标记
-        user_input = sanitize_input(user_input)
-        warning = f"⚠️ 检测到可疑输入，已自动处理。{reason}"
+        _security_logger.warning(
+            "Prompt injection detected: %s", _sanitize_log_string(reason)
+        )
+        raise ValueError(
+            "您的输入包含可疑内容，无法处理。请切换到正常对话模式。"
+        )
 
     # Step 2: PII 脱敏
     scrubber = PIIScrubber()
     safe_input = scrubber.redact(user_input)
 
-    # 如果脱敏前后不同，记录脱敏信息
+    # 如果脱敏前后不同，记录脱敏类型数量（不泄露具体内容）
     if safe_input != user_input:
-        pii_found = [f["type"] for f in scrubber.check(user_input)]
-        warning = (warning or "") + f"（部分敏感信息已脱敏：{', '.join(pii_found)}）"
+        pii_types = scrubber.check(user_input)
+        pii_count = len(pii_types)
+        warning = f"（检测到 {pii_count} 类敏感信息，已自动脱敏）"
+        _security_logger.info(
+            "PII redacted: %d type(s) in thread", pii_count
+        )
 
     return safe_input, warning
 
@@ -147,17 +178,34 @@ def chat(
         agent: Agent 实例
         message: 用户消息
         thread_id: 会话 ID（用于 Checkpointer 持久化）
-        enable_safety: 是否启用安全检查（测试时可关闭）
+        enable_safety: 是否启用安全检查（仅 DEBUG 模式可用）
+        ⚠️ enable_safety=False 仅在 DEBUG=True 时生效，生产环境强制为 True
 
     Returns:
         Agent 的回复文本（已脱敏、不含 thinking 过程）
     """
+    # 生产环境强制开启安全检查，忽略 enable_safety 参数
+    _debug_mode = os.getenv("DEBUG", "").lower() in ("1", "true", "yes")
+    if not _debug_mode and not enable_safety:
+        _security_logger.warning("enable_safety=False called in non-DEBUG env — forcing True")
+        enable_safety = True
     # ===== Step 1: 输入安全处理 =====
     if enable_safety:
-        safe_message, warning = preprocess_input(message)
+        # 验证 thread_id 格式，防止日志注入
+        if not _THREAD_ID_PATTERN.match(thread_id):
+            thread_id = "invalid"
+            _security_logger.warning("Invalid thread_id rejected: %s", thread_id)
+
+        try:
+            safe_message, warning = preprocess_input(message)
+        except ValueError as ve:
+            # Prompt Injection 被阻断，直接返回拒绝消息
+            return str(ve)
+
         if warning:
-            # 记录警告，但不阻断流程
-            print(f"[安全警告] thread={thread_id}: {warning}")
+            _security_logger.info(
+                "thread=%s: %s", thread_id, _sanitize_log_string(warning)
+            )
     else:
         safe_message = message
 

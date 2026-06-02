@@ -1,5 +1,6 @@
 """商品知识库 RAG Tool — 基于 ChromaDB 向量检索"""
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -18,6 +19,9 @@ except ImportError:
 _APP_DIR = Path(sys.modules["app"].__file__).parent
 DATA_DIR = _APP_DIR / "data"
 CHROMA_DIR = DATA_DIR / "chroma_db"
+
+# 专用 logger
+_logger = logging.getLogger("app.tools.product_kb")
 
 
 class ProductKBSearchInput(BaseModel):
@@ -48,14 +52,14 @@ class ProductKBTool:
     def _init_client(self):
         """初始化 ChromaDB 客户端"""
         if not CHROMA_AVAILABLE:
-            print("[WARN] ChromaDB 未安装，商品知识库 RAG Tool 不可用")
+            _logger.warning("ChromaDB 未安装，商品知识库 RAG Tool 不可用")
             return
 
         try:
             self._client = chromadb.PersistentClient(path=self._persist_dir)
             self._collection = self._client.get_collection("ecommerce_products")
         except Exception as e:
-            print(f"[WARN] ChromaDB 初始化失败: {e}")
+            _logger.warning("ChromaDB 初始化失败: %s", e)
             self._collection = None
 
     def search(self, query: str, top_k: int = 3) -> dict:
@@ -125,7 +129,7 @@ class ProductKBTool:
             }
 
         except Exception as e:
-            print(f"[ERROR] RAG 检索失败: {e}")
+            _logger.error("RAG 检索失败: %s", e)
             return {
                 "answer": "知识库检索失败，请稍后再试。",
                 "sources": [],

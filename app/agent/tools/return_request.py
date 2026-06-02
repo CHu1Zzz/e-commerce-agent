@@ -1,17 +1,26 @@
 """退换货申请 Tool"""
 
 import json
+import logging
 import sys
+import threading
 from datetime import datetime
 from pathlib import Path
 
 from langchain_core.tools import tool
 
+from app.security.pii_scrubber import PIIScrubber
 
 _APP_DIR = Path(sys.modules["app"].__file__).parent
 DATA_DIR = _APP_DIR / "data"
 ORDERS_FILE = DATA_DIR / "mock_orders.json"
 TICKETS_FILE = DATA_DIR / "return_tickets.json"
+
+# 文件锁（防止 TOCTOU 竞态）
+_ticket_lock = threading.Lock()
+
+# 专用 logger
+_logger = logging.getLogger("app.tools.return_request")
 
 
 def _load_orders() -> list[dict]:
@@ -21,14 +30,21 @@ def _load_orders() -> list[dict]:
 
 
 def _save_ticket(ticket: dict) -> None:
-    """保存退换货工单"""
-    tickets = []
-    if TICKETS_FILE.exists():
-        with open(TICKETS_FILE, "r", encoding="utf-8") as f:
-            tickets = json.load(f)
-    tickets.append(ticket)
-    with open(TICKETS_FILE, "w", encoding="utf-8") as f:
-        json.dump(tickets, f, ensure_ascii=False, indent=2)
+    """保存退换货工单（线程安全 + PII 脱敏）"""
+    # 先对 reason 做 PII 脱敏再存储
+    scrubber = PIIScrubber()
+    if ticket.get("reason"):
+        ticket["reason"] = scrubber.redact(ticket["reason"])
+
+    with _ticket_lock:
+        tickets = []
+        if TICKETS_FILE.exists():
+            with open(TICKETS_FILE, "r", encoding="utf-8") as f:
+                tickets = json.load(f)
+        tickets.append(ticket)
+        with open(TICKETS_FILE, "w", encoding="utf-8") as f:
+            json.dump(tickets, f, ensure_ascii=False, indent=2)
+    _logger.info("Ticket saved: %s for order %s", ticket["ticket_id"], ticket["order_id"])
 
 
 # 退换货时限（天）
@@ -74,8 +90,15 @@ def submit_return_request(
     if days_passed > RETURN_WINDOW_DAYS:
         return f"订单 {order_id} 已签收超过 {RETURN_WINDOW_DAYS} 天，超出退换货时效，无法申请。"
 
-    # 生成工单
-    ticket_id = f"RTN-{datetime.now().strftime('%Y%m%d')}-{len(_load_tickets()) + 1:03d}"
+    # 生成工单（ID 在锁内生成，防止并发碰撞）
+    with _ticket_lock:
+        existing_tickets = []
+        if TICKETS_FILE.exists():
+            with open(TICKETS_FILE, "r", encoding="utf-8") as f:
+                existing_tickets = json.load(f)
+        ticket_seq = len(existing_tickets) + 1
+        ticket_id = f"RTN-{datetime.now().strftime('%Y%m%d')}-{ticket_seq:03d}"
+
     ticket = {
         "ticket_id": ticket_id,
         "order_id": order_id,

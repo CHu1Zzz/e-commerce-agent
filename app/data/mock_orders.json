@@ -1,0 +1,101 @@
+[
+  {
+    "order_id": "ORD-20260530-001",
+    "user_id": "USR-001",
+    "items": [
+      {
+        "product_id": "PRD-101",
+        "name": "纯棉短袖T恤",
+        "sku": "T恤-M-白",
+        "quantity": 2,
+        "price": 79.9
+      }
+    ],
+    "status": "shipped",
+    "created_at": "2026-05-30T10:00:00",
+    "total_amount": 159.8,
+    "shipping_address": "北京市朝阳区建国路88号"
+  },
+  {
+    "order_id": "ORD-20260528-002",
+    "user_id": "USR-002",
+    "items": [
+      {
+        "product_id": "PRD-202",
+        "name": "运动休闲裤",
+        "sku": "裤子-L-黑",
+        "quantity": 1,
+        "price": 129.0
+      },
+      {
+        "product_id": "PRD-303",
+        "name": "纯棉袜子（3双装）",
+        "sku": "袜子-均码-灰",
+        "quantity": 2,
+        "price": 29.9
+      }
+    ],
+    "status": "delivered",
+    "created_at": "2026-05-28T14:30:00",
+    "total_amount": 188.8,
+    "shipping_address": "上海市浦东新区陆家嘴环路1000号"
+  },
+  {
+    "order_id": "ORD-20260601-003",
+    "user_id": "USR-003",
+    "items": [
+      {
+        "product_id": "PRD-404",
+        "name": "轻薄羽绒服",
+        "sku": "羽绒服-S-藏青",
+        "quantity": 1,
+        "price": 399.0
+      }
+    ],
+    "status": "pending",
+    "created_at": "2026-06-01T09:15:00",
+    "total_amount": 399.0,
+    "shipping_address": "广州市天河区体育西路191号"
+  },
+  {
+    "order_id": "ORD-20260525-004",
+    "user_id": "USR-004",
+    "items": [
+      {
+        "product_id": "PRD-505",
+        "name": "真丝连衣裙",
+        "sku": "连衣裙-S-粉",
+        "quantity": 1,
+        "price": 599.0
+      }
+    ],
+    "status": "delivered",
+    "created_at": "2026-05-25T16:00:00",
+    "total_amount": 599.0,
+    "shipping_address": "深圳市南山区科技园路8号"
+  },
+  {
+    "order_id": "ORD-20260531-005",
+    "user_id": "USR-005",
+    "items": [
+      {
+        "product_id": "PRD-606",
+        "name": "儿童运动鞋",
+        "sku": "运动鞋-28-蓝",
+        "quantity": 1,
+        "price": 199.0
+      },
+      {
+        "product_id": "PRD-101",
+        "name": "纯棉短袖T恤",
+        "sku": "T恤-S-白",
+        "quantity": 1,
+        "price": 79.9
+      }
+    ],
+    "status": "shipped",
+    "created_at": "2026-05-31T11:20:00",
+    "total_amount": 278.9,
+    "shipping_address": "成都市锦江区春熙路99号"
+  }
+]

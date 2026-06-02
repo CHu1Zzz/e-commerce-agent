@@ -1,0 +1,58 @@
+[
+  {
+    "order_id": "ORD-20260530-001",
+    "carrier": "顺丰速运",
+    "tracking_number": "SF1234567890",
+    "estimated_delivery": "2026-06-03",
+    "timeline": [
+      { "time": "2026-06-01 08:00", "status": "已揽收", "location": "北京分拨中心" },
+      { "time": "2026-06-01 14:00", "status": "运输中", "location": "北京→上海" },
+      { "time": "2026-06-02 06:00", "status": "派送中", "location": "上海浦东营业点" }
+    ]
+  },
+  {
+    "order_id": "ORD-20260528-002",
+    "carrier": "中通快递",
+    "tracking_number": "ZT9876543210",
+    "estimated_delivery": "2026-05-31",
+    "timeline": [
+      { "time": "2026-05-28 16:00", "status": "已揽收", "location": "上海分拨中心" },
+      { "time": "2026-05-29 08:00", "status": "运输中", "location": "上海→杭州" },
+      { "time": "2026-05-30 10:00", "status": "派送中", "location": "杭州西湖营业点" },
+      { "time": "2026-05-30 15:30", "status": "已签收", "location": "杭州西湖区签收" }
+    ]
+  },
+  {
+    "order_id": "ORD-20260601-003",
+    "carrier": "待发货",
+    "tracking_number": null,
+    "estimated_delivery": "预计6月4日发货",
+    "timeline": [
+      { "time": "2026-06-01 09:15", "status": "订单已创建，等待发货", "location": "广州仓库" }
+    ]
+  },
+  {
+    "order_id": "ORD-20260525-004",
+    "carrier": "京东物流",
+    "tracking_number": "JD5555666677",
+    "estimated_delivery": "2026-05-28",
+    "timeline": [
+      { "time": "2026-05-25 17:00", "status": "已揽收", "location": "深圳分拨中心" },
+      { "time": "2026-05-26 06:00", "status": "运输中", "location": "深圳→武汉" },
+      { "time": "2026-05-27 08:00", "status": "运输中", "location": "武汉→深圳" },
+      { "time": "2026-05-27 18:00", "status": "派送中", "location": "深圳南山区营业点" },
+      { "time": "2026-05-28 10:00", "status": "已签收", "location": "深圳南山区签收" }
+    ]
+  },
+  {
+    "order_id": "ORD-20260531-005",
+    "carrier": "韵达快递",
+    "tracking_number": "YD1122334455",
+    "estimated_delivery": "2026-06-04",
+    "timeline": [
+      { "time": "2026-06-01 09:00", "status": "已揽收", "location": "成都分拨中心" },
+      { "time": "2026-06-01 18:00", "status": "运输中", "location": "成都→重庆" },
+      { "time": "2026-06-02 07:00", "status": "运输中", "location": "重庆中转站" }
+    ]
+  }
+]

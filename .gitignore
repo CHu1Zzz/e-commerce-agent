@@ -1,0 +1,140 @@
+# ByteDance / macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnail DB
+._*
+
+# Visual Studio Code
+.vscode/
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# JetBrains IDEs
+.idea/
+*.iml
+out/
+*.ipr
+*.iws
+
+# Python
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# Environments
+.env
+.venv
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV
+env.bak/
+venv.bak/
+
+# IntelliJ
+*.iml
+out/
+gen/
+
+# ChromaDB / 向量数据库
+app/data/chroma_db/
+
+# 退换货工单（运行时生成）
+app/data/return_tickets.json
+
+# Logs
+*.log
+logs/
+
+# macOS
+.DS_Store
+
+# Local history (IntelliJ)
+.idea/workspace.xml
+.idea/tasks.xml

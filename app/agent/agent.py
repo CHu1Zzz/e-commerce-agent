@@ -75,7 +75,24 @@ def _force_tool_call(agent, message: str, config: dict) -> Optional[str]:
     if re.search(r"(推荐|有什么.*商品|跑步|健身|通勤|送礼|保暖)", msg_lower):
         from app.agent.tools.product_recommend import product_recommend
         try:
-            result = product_recommend.invoke({})
+            # 从消息中提取场景关键词
+            scene = None
+            if "跑步" in msg_lower:
+                scene = "跑步"
+            elif "健身" in msg_lower:
+                scene = "健身"
+            elif "通勤" in msg_lower:
+                scene = "通勤"
+            elif "送礼" in msg_lower:
+                scene = "送礼"
+            elif "保暖" in msg_lower:
+                scene = "保暖"
+            elif "夏季" in msg_lower:
+                scene = "夏季"
+            kwargs = {}
+            if scene:
+                kwargs["scene"] = scene
+            result = product_recommend.invoke(kwargs)
             return _format_tool_result(result, "商品推荐")
         except Exception:
             pass

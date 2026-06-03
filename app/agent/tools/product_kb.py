@@ -86,14 +86,26 @@ class ProductKBTool:
             }
 
         try:
-            from langchain_openai import OpenAIEmbeddings
+            from langchain_core.embeddings import Embeddings
 
-            embeddings = OpenAIEmbeddings(
-                model="text-embedding-3-small",
-                base_url=os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat/v1"),
-                api_key=os.getenv("MINIMAX_API_KEY", ""),
-            )
+            class LocalEmbeddings(Embeddings):
+                """本地 sentence-transformers embeddings（all-MiniLM-L6-v2）"""
+                _model = None
 
+                @classmethod
+                def _get_model(cls):
+                    if cls._model is None:
+                        from sentence_transformers import SentenceTransformer
+                        cls._model = SentenceTransformer("all-MiniLM-L6-v2")
+                    return cls._model
+
+                def embed_documents(self, texts: list[str], **kwargs) -> list[list[float]]:
+                    return self._get_model().encode(texts, normalize_embeddings=True).tolist()
+
+                def embed_query(self, text: str) -> list[float]:
+                    return self._get_model().encode([text], normalize_embeddings=True)[0].tolist()
+
+            embeddings = LocalEmbeddings()
             query_vec = embeddings.embed_query(query)
 
             results = self._collection.query(

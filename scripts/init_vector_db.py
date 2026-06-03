@@ -9,13 +9,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 import chromadb
-from langchain_openai import OpenAIEmbeddings
 from dotenv import load_dotenv
 
 load_dotenv()
 
 COLLECTION_NAME = "ecommerce_products"
-EMBEDDING_MODEL = "text-embedding-3-small"
 
 
 def get_product_docs() -> list[dict]:
@@ -219,11 +217,28 @@ def init_chroma(persist_dir: str = None):
     print(f"✓ 已创建 collection: {COLLECTION_NAME}")
 
     # 初始化 embedding 模型
-    embeddings = OpenAIEmbeddings(
-        model=EMBEDDING_MODEL,
-        base_url=os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat/v1"),
-        api_key=os.getenv("MINIMAX_API_KEY", ""),
-    )
+    # 使用本地 sentence-transformers 模型（all-MiniLM-L6-v2）
+    # 避免依赖 MiniMax embedding API（需要 GROUP_ID）
+    try:
+        from langchain_core.embeddings import Embeddings
+
+        class LocalEmbeddings(Embeddings):
+            """本地 sentence-transformers embeddings"""
+
+            def __init__(self):
+                from sentence_transformers import SentenceTransformer
+                self.model = SentenceTransformer("all-MiniLM-L6-v2")
+
+            def embed_documents(self, texts: list[str], **kwargs) -> list[list[float]]:
+                return self.model.encode(texts, normalize_embeddings=True).tolist()
+
+            def embed_query(self, text: str) -> list[float]:
+                return self.model.encode([text], normalize_embeddings=True)[0].tolist()
+
+        embeddings = LocalEmbeddings()
+    except Exception as e:
+        print(f"Embedding 模型初始化失败: {e}")
+        return
 
     docs = get_product_docs()
     print(f"开始为 {len(docs)} 条文档生成向量...")

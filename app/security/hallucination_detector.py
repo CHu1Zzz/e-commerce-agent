@@ -34,6 +34,14 @@ class HallucinationDetector:
                 "checked_fields": dict
             }
         """
+        # 如果工具返回为空（未调用工具或无结构化返回），跳过检测
+        if not tool_result or not tool_result.strip():
+            return {
+                "is_consistent": True,
+                "conflicts": [],
+                "checked_fields": {},
+            }
+
         conflicts = []
         checked_fields = {}
 

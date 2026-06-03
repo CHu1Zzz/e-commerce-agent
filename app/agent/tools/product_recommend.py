@@ -138,6 +138,8 @@ def product_recommend(
 
     # ===== 2. 过滤 + 打分 =====
     scored_products = []
+    has_any_filter = any([effective_scene, preference_tags, budget is not None, category])
+
     for p in products:
         # 预算过滤
         if budget is not None and p.get("price", 0) > budget:
@@ -165,14 +167,16 @@ def product_recommend(
                     if kw in tag.lower():
                         score += 0.15
 
-        # 销量和评分为基础分
+        # 基础分（销量+评分），冷启动时加大权重
         sales_normalized = min(p.get("sales_count", 0) / 10000, 1.0)
         rating_normalized = p.get("rating", 0) / 5.0
-        base_score = sales_normalized * 0.15 + rating_normalized * 0.25
+        base_weight = 0.5 if not has_any_filter else 0.25
+        base_score = sales_normalized * 0.15 + rating_normalized * base_weight
         score += base_score
 
         if score > 0:
             p["_score"] = score
+            p["_base_score"] = base_score
             scored_products.append(p)
 
     if not scored_products:
@@ -184,8 +188,23 @@ def product_recommend(
             + "）暂未找到合适的商品，请尝试放宽条件。"
         )
 
-    # ===== 3. 排序 =====
-    scored_products.sort(key=lambda x: x["_score"], reverse=True)
+    # ===== 3. 排序 + 去重 =====
+    # 冷启动时（无任何筛选条件），优先按销量+评分综合排序，增加差异化
+    if not has_any_filter:
+        # 综合得分 = 销量排名分 + 评分分，先按综合得分排序
+        scored_products.sort(key=lambda x: (x.get("sales_count", 0) * 0.01 + x.get("rating", 0) * 20), reverse=True)
+        # 同类别最多2件，避免重复
+        seen_subcategories = {}
+        deduped = []
+        for p in scored_products:
+            sub = p.get("subcategory", "")
+            if seen_subcategories.get(sub, 0) < 2:
+                deduped.append(p)
+                seen_subcategories[sub] = seen_subcategories.get(sub, 0) + 1
+        scored_products = deduped
+    else:
+        scored_products.sort(key=lambda x: x["_score"], reverse=True)
+
     top_products = scored_products[:top_k]
 
     # ===== 4. 格式化输出 =====

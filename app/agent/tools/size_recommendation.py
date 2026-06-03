@@ -214,38 +214,36 @@ def size_recommend(
         )
 
     # ===== 3. 生成推荐 =====
-    recommendations = []
+    # 精确匹配模式：用户指定了具体品类时，只返回该品类
+    is_explicit_pants = any(w in product_type_lower for w in ["裤子", "pants", "运动裤", "休闲裤", "裙裤"])
+    is_explicit_shoes = any(w in product_type_lower for w in ["鞋", "shoes", "运动鞋", "童鞋", "靴"])
+    is_explicit_tshirt = any(w in product_type_lower for w in ["t恤", "t-shirt", "衬衫", "shirt", "上衣", "T恤"])
+    is_explicit_dress = "连衣裙" in product_type_lower
+
+    lines = []
 
     # 鞋码推荐
-    if foot_length_cm and ("鞋" in product_type_lower or "shoes" in product_type_lower):
+    if foot_length_cm and (is_explicit_shoes or not is_explicit_pants and not is_explicit_tshirt and not is_explicit_dress):
         shoes_recommendation = _recommend_shoes_size(foot_length_cm)
-        recommendations.append(f"👟 鞋码推荐：{shoes_recommendation}")
-        # 童鞋特殊处理
+        lines.append(f"👟 鞋码推荐：{shoes_recommendation}")
         if foot_length_cm < 25:
-            recommendations.append("（您测量的是童鞋尺码范围）")
+            lines.append("（您测量的是童鞋尺码范围）")
 
-    # T恤/衬衫推荐
-    if height_cm and any(w in product_type_lower for w in ["t恤", "t-shirt", "衬衫", "shirt", "上衣", "T恤"]):
+    # T恤/衬衫推荐（仅当用户明确询问上衣类或未指定具体品类时）
+    if height_cm and is_explicit_tshirt and not is_explicit_pants and not is_explicit_shoes and not is_explicit_dress:
         tshirt_size = _recommend_tshirt_size(height_cm, chest_cm)
-        recommendations.append(
-            f"👕 {product_type}尺码推荐：{tshirt_size}"
-            + ("（基于身高" + str(height_cm) + "cm）" if height_cm else "")
-        )
-        recommendations.append("⚠️ 注意：该品类版型偏大，建议选小一码")
+        lines.append(f"👕 {product_type}尺码推荐：{tshirt_size}（基于身高{height_cm}cm）")
+        lines.append("⚠️ 注意：该品类版型偏大，建议选小一码")
 
-    # 裤子推荐
-    if height_cm and any(w in product_type_lower for w in ["裤子", "pants", "运动裤", "休闲裤", "裙裤"]):
+    # 裤子推荐（仅当用户明确询问裤子或未指定具体品类时）
+    if height_cm and is_explicit_pants and not is_explicit_shoes and not is_explicit_tshirt and not is_explicit_dress:
         pants_size = _recommend_pants_size(height_cm, waist_cm)
-        recommendations.append(
-            f"👖 {product_type}尺码推荐：{pants_size}"
-            + ("（基于身高" + str(height_cm) + "cm）" if height_cm else "")
-        )
-        if waist_cm:
-            recommendations[-1] += f"、腰围{waist_cm}cm"
-        recommendations.append("💡 裤子尺码建议：运动裤弹性好，可选正常尺码或选大一号")
+        waist_str = f"、腰围{waist_cm}cm" if waist_cm else ""
+        lines.append(f"👖 {product_type}尺码推荐：{pants_size}（基于身高{height_cm}cm{waist_str}）")
+        lines.append("💡 裤子尺码建议：运动裤弹性好，可选正常尺码或选大一号")
 
-    # 连衣裙推荐（基于身高）
-    if height_cm and "连衣裙" in product_type_lower:
+    # 连衣裙推荐
+    if height_cm and is_explicit_dress and not is_explicit_shoes:
         if height_cm < 160:
             dr_size = "S"
         elif height_cm < 165:
@@ -256,31 +254,27 @@ def size_recommend(
             dr_size = "XL"
         else:
             dr_size = "XXL"
-        recommendations.append(f"👗 连衣裙尺码推荐：{dr_size}（基于身高{height_cm}cm）")
+        lines.append(f"👗 连衣裙尺码推荐：{dr_size}（基于身高{height_cm}cm）")
 
-    # 通用（只有身高，无特定品类）
-    if not recommendations and height_cm:
+    # 通用（只有身高，无特定品类，或品类宽泛）
+    if not lines and height_cm:
         tshirt_size = _recommend_tshirt_size(height_cm)
         pants_size = _recommend_pants_size(height_cm)
-        recommendations.append(
-            f"基于您的身高{height_cm}cm，建议尺码范围：\n"
-            f"  • T恤/衬衫：{tshirt_size}码\n"
-            f"  • 裤子：{pants_size}码\n"
-            f"  （数据越完整，推荐越准确）"
-        )
+        lines.append(f"基于您的身高{height_cm}cm，建议尺码范围：")
+        lines.append(f"  • T恤/衬衫：{tshirt_size}码")
+        lines.append(f"  • 裤子：{pants_size}码")
+        lines.append("（数据越完整，推荐越准确）")
 
     # 只有 user_profile 的情况
-    if not recommendations and user_profile:
-        recommendations.append(
-            f"您提到您的情况：{user_profile}\n"
-            f"建议您参考以下尺码表：\n\n{_get_size_guide_text(product_type_lower)}"
-        )
+    if not lines and user_profile:
+        lines.append(f"您提到您的情况：{user_profile}")
+        lines.append(f"建议您参考以下尺码表：\n{_get_size_guide_text(product_type_lower)}")
 
-    if not recommendations:
+    if not lines:
         return (
             f"抱歉，我暂时无法根据您提供的信息推荐{product_type}的尺码，"
             f"请提供更完整的体型数据（身高、体重、腰围等）。\n\n"
             f"{_get_size_guide_text(product_type_lower)}"
         )
 
-    return "\n".join(recommendations)
+    return "\n".join(lines)

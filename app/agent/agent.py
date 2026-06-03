@@ -25,6 +25,9 @@ from app.agent.tools.logistics import track_logistics
 from app.agent.tools.return_request import submit_return_request
 from app.agent.tools.human_handoff import transfer_to_human
 from app.agent.tools.product_kb import product_kb_search
+from app.agent.tools.product_search import product_search
+from app.agent.tools.size_recommendation import size_recommend
+from app.agent.tools.product_recommend import product_recommend
 from app.security.pii_scrubber import PIIScrubber
 from app.security.prompt_injection_detector import check_injection, sanitize_input
 
@@ -89,7 +92,10 @@ def create_agent(
         track_logistics,
         submit_return_request,
         transfer_to_human,
-        product_kb_search,  # 新增：RAG 商品知识库 Tool
+        product_kb_search,     # RAG 商品知识库 Tool
+        product_search,        # 商品搜索 Tool
+        size_recommend,        # 尺码推荐 Tool
+        product_recommend,     # 商品推荐 Tool
     ]
 
     # ===== 4. 状态持久化 Checkpointer =====

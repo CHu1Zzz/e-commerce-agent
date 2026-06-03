@@ -42,10 +42,14 @@ ecommerce-cs-agent/
 │   │       ├── logistics.py         # track_logistics Tool
 │   │       ├── return_request.py    # submit_return_request Tool
 │   │       ├── human_handoff.py     # transfer_to_human Tool
-│   │       └── product_kb.py        # product_kb_search（RAG）
+│   │       ├── product_kb.py        # product_kb_search（RAG 知识库）
+│   │       ├── product_search.py    # product_search Tool（商品搜索）
+│   │       ├── size_recommendation.py  # size_recommend Tool（尺码推荐）
+│   │       └── product_recommend.py  # product_recommend Tool（商品推荐）
 │   ├── data/
 │   │   ├── mock_orders.json         # 模拟订单（5 条）
 │   │   ├── mock_logistics.json      # 模拟物流（5 条）
+│   │   ├── mock_products.json      # 商品目录（20+ 条）
 │   │   ├── faq.json                 # FAQ（已迁移至向量库）
 │   │   ├── chroma_db/               # 向量库目录（初始化后生成）
 │   │   └── return_tickets.json       # 退换货工单（运行时生成）
@@ -97,7 +101,7 @@ MINIMAX_MODEL=MiniMax-Text-01
 
 ```bash
 # 方式一：直接启动
-streamlit run app/ui/streamlit_app.py
+d:/e-commerce-agent/.venv/Scripts/streamlit.exe run d:/e-commerce-agent/app/ui/streamlit_app.py --server.headless true
 
 # 方式二：通过入口脚本
 python app/main.py
@@ -180,6 +184,24 @@ result = product_kb_search.invoke({"query": "T恤可以机洗吗？", "top_k": 3
 
 ---
 
+## 完整功能矩阵（生产级电商客服）
+
+| 类别 | 功能 | 工具文件 | 状态 |
+|------|------|---------|------|
+| **售后** | 订单查询 | `order_query.py` | ✅ 已完成 |
+| | 物流追踪 | `logistics.py` | ✅ 已完成 |
+| | 退换货申请 | `return_request.py` | ✅ 已完成 |
+| | 转人工 | `human_handoff.py` | ✅ 已完成 |
+| **售前** | 商品知识库（RAG） | `product_kb.py` | ✅ 已完成 |
+| | 商品搜索 | `product_search.py` | ✅ 已完成 |
+| | 尺码推荐 | `size_recommendation.py` | ✅ 已完成 |
+| | 商品推荐 | `product_recommend.py` | ✅ 已完成 |
+| **安全** | PII 脱敏 | `pii_scrubber.py` | ✅ 已完成 |
+| | Prompt 注入检测 | `prompt_injection_detector.py` | ✅ 已完成 |
+| | 幻觉检测 | `hallucination_detector.py` | ✅ 已完成 |
+
+---
+
 ## 后续计划（Phase 2/3）
 
 - LangGraph StateGraph 多 Agent 路由（Supervisor → 专家子 Agent）
@@ -187,3 +209,24 @@ result = product_kb_search.invoke({"query": "T恤可以机洗吗？", "top_k": 3
 - Playwright E2E 测试套件
 - Docker Compose 部署（Agent + ChromaDB + Redis）
 - Redis 语义缓存 + 限流
+
+---
+
+## 工作流程（Claude Code 必须遵循）
+
+每次修改代码后，必须执行以下步骤：
+
+### 1. 安全审查
+- 检查新增代码是否存在安全漏洞（SQL注入、路径遍历、PII泄露、Prompt注入等）
+- 审查所有用户输入的验证和清理
+- 确认没有硬编码敏感信息
+
+### 2. 测试验证
+- 启动 Streamlit 应用进行功能测试
+- 验证新增功能是否正常工作
+- 确认已有功能未被破坏
+
+### 3. GitHub 提交
+- 完成测试后，将代码 commit 到 GitHub 远程仓库
+- 使用清晰的 commit message 描述修改内容
+- 格式：`feat: add [功能名称]` 或 `fix: fix [问题描述]`

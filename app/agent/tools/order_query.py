@@ -1,22 +1,17 @@
 """订单查询 Tool"""
 
-import json
 import sys
 from pathlib import Path
 
 from langchain_core.tools import tool
+
+from app.agent.tools._shared_data import load_orders
 
 
 # 定位项目根目录（ecommerce-cs-agent/app/）
 _APP_DIR = Path(sys.modules["app"].__file__).parent
 DATA_DIR = _APP_DIR / "data"
 ORDERS_FILE = DATA_DIR / "mock_orders.json"
-
-
-def _load_orders() -> list[dict]:
-    """加载模拟订单数据"""
-    with open(ORDERS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 # 订单状态中文映射
@@ -36,7 +31,7 @@ def query_order(order_id: str) -> str:
     Args:
         order_id: 订单号，格式如 ORD-20260530-001
     """
-    orders = _load_orders()
+    orders = load_orders()
 
     for order in orders:
         if order["order_id"] == order_id:

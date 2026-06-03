@@ -1,6 +1,5 @@
 """商品推荐 Tool — 基于用户偏好/场景/行为数据推荐商品"""
 
-import json
 import sys
 from pathlib import Path
 from typing import Optional
@@ -8,17 +7,13 @@ from typing import Optional
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from app.agent.tools._shared_data import load_products
+
 
 # 定位项目根目录
 _APP_DIR = Path(sys.modules["app"].__file__).parent
 DATA_DIR = _APP_DIR / "data"
 PRODUCTS_FILE = DATA_DIR / "mock_products.json"
-
-
-def _load_products() -> list[dict]:
-    """加载商品目录数据"""
-    with open(PRODUCTS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 class ProductRecommendInput(BaseModel):
@@ -127,7 +122,7 @@ def product_recommend(
         preference_tags: 用户偏好标签（透气/保暖/轻便等）
         top_k: 返回推荐数量，默认5条
     """
-    products = _load_products()
+    products = load_products()
 
     # ===== 1. 确定推荐策略 =====
     # 场景优先标签
@@ -175,9 +170,7 @@ def product_recommend(
         score += base_score
 
         if score > 0:
-            p["_score"] = score
-            p["_base_score"] = base_score
-            scored_products.append(p)
+            scored_products.append({**p, "_score": score, "_base_score": base_score})
 
     if not scored_products:
         return (

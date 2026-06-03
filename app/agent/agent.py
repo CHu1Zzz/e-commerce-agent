@@ -48,13 +48,11 @@ def _sanitize_log_string(text: str) -> str:
 
 
 # 强制工具调用的触发关键词（命中则必须调用工具）
+# 每个条目: (regex_pattern, tool_name) — tool_name 供 _force_tool_call 直接路由
 _FORCE_TOOL_PATTERNS = [
-    (r"推荐", ["product_recommend"]),
-    (r"有什么.*(商品|东西|买的|送)", ["product_recommend"]),
-    (r"(跑步|健身|通勤|送礼|保暖|夏季).*(推荐|买)", ["product_recommend"]),
-    (r"(T恤|裤子|裙子|鞋子|衬衫).*(推荐|选.*码|什么码)", ["size_recommend"]),
-    (r"(身高|买.*码|穿.*码|选.*码)", ["size_recommend"]),
-    (r"有没有|(帮我)?找.*(商品|衣服|鞋|裤)", ["product_search"]),
+    (re.compile(r"(推荐|有什么.*商品|跑步|健身|通勤|送礼|保暖|夏季)"), "product_recommend"),
+    (re.compile(r"(身高|买.*码|穿.*码|选.*码|T恤|裤子|鞋子)"), "size_recommend"),
+    (re.compile(r"(有没有|帮我找|搜索|找.*(商品|衣服|鞋|裤))"), "product_search"),
 ]
 
 
@@ -62,74 +60,65 @@ def _should_force_tool_call(message: str) -> bool:
     """检查用户消息是否命中强制工具调用模式"""
     msg_lower = message.lower()
     for pattern, _ in _FORCE_TOOL_PATTERNS:
-        if re.search(pattern, msg_lower):
+        if pattern.search(msg_lower):
             return True
     return False
+
+
 
 
 def _force_tool_call(agent, message: str, config: dict) -> Optional[str]:
     """当 Agent 跳过工具调用时，强制调用对应工具并返回结果"""
     msg_lower = message.lower()
 
-    # 根据关键词选择工具
-    if re.search(r"(推荐|有什么.*商品|跑步|健身|通勤|送礼|保暖)", msg_lower):
-        from app.agent.tools.product_recommend import product_recommend
-        try:
-            # 从消息中提取场景关键词
-            scene = None
-            if "跑步" in msg_lower:
-                scene = "跑步"
-            elif "健身" in msg_lower:
-                scene = "健身"
-            elif "通勤" in msg_lower:
-                scene = "通勤"
-            elif "送礼" in msg_lower:
-                scene = "送礼"
-            elif "保暖" in msg_lower:
-                scene = "保暖"
-            elif "夏季" in msg_lower:
-                scene = "夏季"
-            kwargs = {}
-            if scene:
-                kwargs["scene"] = scene
-            result = product_recommend.invoke(kwargs)
-            return _format_tool_result(result, "商品推荐")
-        except Exception:
-            pass
+    # 用预编译正则匹配，从 tuple 直接获取 tool_name，消灭重复 if/elif
+    for pattern, tool_name in _FORCE_TOOL_PATTERNS:
+        if pattern.search(msg_lower):
+            return _dispatch_forced_tool(tool_name, message, msg_lower)
 
-    if re.search(r"(身高|买.*码|穿.*码|选.*码|T恤|裤子|鞋子)", msg_lower):
+    return None
+
+
+def _dispatch_forced_tool(tool_name: str, message: str, msg_lower: str) -> Optional[str]:
+    """根据 tool_name 分发到对应工具的强制调用逻辑"""
+    if tool_name == "product_recommend":
+        from app.agent.tools.product_recommend import product_recommend
+
+        scene = next((kw for kw in ("跑步", "健身", "通勤", "送礼", "保暖", "夏季") if kw in msg_lower), None)
+        kwargs = {"scene": scene} if scene else {}
+        try:
+            return _format_tool_result(product_recommend.invoke(kwargs), "商品推荐")
+        except Exception:
+            return None
+
+    if tool_name == "size_recommend":
         from app.agent.tools.size_recommendation import size_recommend
-        # 尝试从消息中提取品类和身高
+
         product_type = "T恤"
         if "裤" in msg_lower:
             product_type = "裤子"
         elif "鞋" in msg_lower:
             product_type = "运动鞋"
-        # 尝试提取身高
         height_match = re.search(r"(\d+)\s*(cm|厘米)?", message)
         height = float(height_match.group(1)) if height_match else None
+        kwargs = {"product_type": product_type}
+        if height:
+            kwargs["height_cm"] = height
         try:
-            kwargs = {"product_type": product_type}
-            if height:
-                kwargs["height_cm"] = height
-            result = size_recommend.invoke(kwargs)
-            return _format_tool_result(result, "尺码推荐")
+            return _format_tool_result(size_recommend.invoke(kwargs), "尺码推荐")
         except Exception:
-            pass
+            return None
 
-    if re.search(r"(有没有|帮我找|搜索|找.*(商品|衣服|鞋|裤))", msg_lower):
+    if tool_name == "product_search":
         from app.agent.tools.product_search import product_search
-        # 提取搜索词
-        keywords = re.sub(r"(有没有|帮我找|搜索|找|的|商品|衣服|鞋|裤子)", "", message)
-        keywords = keywords.strip()
+
+        keywords = re.sub(r"(有没有|帮我找|搜索|找|的 商品|衣服|鞋|裤子)", "", message).strip()
         try:
-            result = product_search.invoke({"query": keywords or "衣服", "top_k": 5})
-            return _format_tool_result(result, "商品搜索")
+            return _format_tool_result(product_search.invoke({"query": keywords or "衣服", "top_k": 5}), "商品搜索")
         except Exception:
-            pass
+            return None
 
     return None
-
 
 def _format_tool_result(result: str, label: str) -> str:
     """格式化工具返回结果，确保通过幻觉检测"""
@@ -155,6 +144,7 @@ def create_agent(
     Returns:
         LangGraph ReAct Agent 实例（已配置 checkpointer）
     """
+    from datetime import datetime as _datetime
     if base_url is None:
         base_url = os.getenv("MINIMAX_BASE_URL", "https://api.minimax.chat/v1")
 
@@ -195,7 +185,7 @@ def create_agent(
     agent = create_react_agent(
         model=llm,
         tools=tools,
-        prompt=get_system_prompt(),
+        prompt=get_system_prompt(_datetime.now()),
         checkpointer=checkpointer,
     )
 
@@ -288,8 +278,9 @@ def chat(
     if enable_safety:
         # 验证 thread_id 格式，防止日志注入
         if not _THREAD_ID_PATTERN.match(thread_id):
+            rejected_id = thread_id  # 保留原始值用于安全审计
             thread_id = "invalid"
-            _security_logger.warning("Invalid thread_id rejected: %s", thread_id)
+            _security_logger.warning("Invalid thread_id rejected: %s", _sanitize_log_string(rejected_id))
 
         try:
             safe_message, warning = preprocess_input(message)

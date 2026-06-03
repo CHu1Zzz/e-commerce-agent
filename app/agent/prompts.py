@@ -5,12 +5,11 @@ Agent 如需查询商品政策/尺码/退换货等信息，应调用 product_kb_
 """
 
 from datetime import datetime
+from typing import Optional
 
 
-def get_system_prompt() -> str:
-    """获取 Agent 的 System Prompt（生产级）"""
-
-    return f"""你是"小帮"，一位友好、专业的电商客服助手。
+# 预编译静态部分（不包含时间戳）
+_PROMPT_TEMPLATE = """你是"小帮"，一位友好、专业的电商客服助手。
 
 ## 你的职责
 - 回答用户关于订单、物流、退换货、商品（搜索/推荐/尺码）的咨询
@@ -81,5 +80,12 @@ def get_system_prompt() -> str:
 - 按预算推荐（200块以内送父母）
 
 ## 当前时间
-{datetime.now().strftime("%Y-%m-%d %H:%M")}
+{current_time}
 """
+
+
+def get_system_prompt(t: Optional[datetime] = None) -> str:
+    """获取 Agent 的 System Prompt（生产级）"""
+    if t is None:
+        t = datetime.now()
+    return _PROMPT_TEMPLATE.format(current_time=t.strftime("%Y-%m-%d %H:%M"))

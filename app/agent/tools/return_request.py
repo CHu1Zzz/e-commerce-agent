@@ -1,6 +1,5 @@
 """退换货申请 Tool"""
 
-import json
 import logging
 import sys
 import threading
@@ -9,6 +8,7 @@ from pathlib import Path
 
 from langchain_core.tools import tool
 
+from app.agent.tools._shared_data import load_orders
 from app.security.pii_scrubber import PIIScrubber
 
 _APP_DIR = Path(sys.modules["app"].__file__).parent
@@ -21,12 +21,6 @@ _ticket_lock = threading.Lock()
 
 # 专用 logger
 _logger = logging.getLogger("app.tools.return_request")
-
-
-def _load_orders() -> list[dict]:
-    """加载模拟订单数据"""
-    with open(ORDERS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 def _save_ticket(ticket: dict) -> None:
@@ -64,7 +58,7 @@ def submit_return_request(
         return_type: 退换货类型，"return" 表示退货，"exchange" 表示换货
         reason: 退换货原因，如"尺码不合适"、"质量问题"、"不想要了"等
     """
-    orders = _load_orders()
+    orders = load_orders()
 
     # 查找订单
     order = None

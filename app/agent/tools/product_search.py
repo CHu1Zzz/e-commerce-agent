@@ -1,6 +1,5 @@
 """商品搜索 Tool — 支持按名称/类别/标签/价格区间搜索商品"""
 
-import json
 import sys
 from pathlib import Path
 from typing import Optional
@@ -8,17 +7,13 @@ from typing import Optional
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
 
+from app.agent.tools._shared_data import load_products
+
 
 # 定位项目根目录
 _APP_DIR = Path(sys.modules["app"].__file__).parent
 DATA_DIR = _APP_DIR / "data"
 PRODUCTS_FILE = DATA_DIR / "mock_products.json"
-
-
-def _load_products() -> list[dict]:
-    """加载商品目录数据"""
-    with open(PRODUCTS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
 
 
 class ProductSearchInput(BaseModel):
@@ -110,7 +105,7 @@ def product_search(
         sort_by: 排序方式（relevance/price_asc/price_desc/sales/rating）
         top_k: 返回商品数量，默认6条
     """
-    products = _load_products()
+    products = load_products()
 
     # ===== 1. 过滤 =====
     results = []

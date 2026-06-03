@@ -194,7 +194,17 @@ def init_chroma(persist_dir: str = None):
         app_dir = PROJECT_ROOT / "app"
         persist_dir = str(app_dir / "data" / "chroma_db")
 
-    persist_path = Path(persist_dir)
+    # 安全校验：禁止路径遍历和绝对路径逃逸
+    persist_path = Path(persist_dir).resolve()
+    allowed_root = PROJECT_ROOT.resolve()
+    try:
+        persist_path.relative_to(allowed_root)
+    except ValueError:
+        raise ValueError(
+            f"禁止的存储路径: {persist_dir!r} — 不能在项目根目录之外初始化向量库。"
+            f"允许的根路径: {allowed_root}"
+        )
+
     persist_path.mkdir(parents=True, exist_ok=True)
 
     print(f"ChromaDB 持久化路径: {persist_path}")

@@ -125,18 +125,39 @@ class ProductKBTool:
             metas = results["metadatas"][0]
             scores = results["distances"][0] if "distances" in results else []
 
+            # 过滤低相似度结果（L2 距离 > 1.2 视为无关）
+            DISTANCE_THRESHOLD = 1.2
+            filtered_docs = []
+            filtered_metas = []
+            filtered_scores = []
+            filtered_ids = []
+            for doc, meta, score, doc_id in zip(docs, metas, scores, results["ids"][0]):
+                if score <= DISTANCE_THRESHOLD:
+                    filtered_docs.append(doc)
+                    filtered_metas.append(meta)
+                    filtered_scores.append(score)
+                    filtered_ids.append(doc_id)
+
+            if not filtered_docs:
+                return {
+                    "answer": "未找到相关信息，请咨询人工客服。",
+                    "sources": [],
+                    "scores": [],
+                    "doc_types": [],
+                }
+
             # 拼接上下文，不同 doc_type 可加前缀标签
             context_parts = []
             doc_types = []
-            for doc, meta in zip(docs, metas):
+            for doc, meta in zip(filtered_docs, filtered_metas):
                 doc_type = meta.get("doc_type", "unknown")
                 doc_types.append(doc_type)
                 context_parts.append(f"[{doc_type}] {doc}")
 
             return {
                 "answer": "\n".join(context_parts),
-                "sources": results["ids"][0],
-                "scores": [float(s) for s in scores] if scores else [],
+                "sources": filtered_ids,
+                "scores": [float(s) for s in filtered_scores],
                 "doc_types": doc_types,
             }
 

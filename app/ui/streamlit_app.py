@@ -25,16 +25,39 @@ load_dotenv()
 
 def init_session_state():
     """初始化 Streamlit session state"""
+    import uuid
+
     if "agent" not in st.session_state:
         st.session_state.agent = None
         st.session_state.chat_history = []
         st.session_state.init_error = None
+        st.session_state.thread_id = str(uuid.uuid4())  # 每浏览器会话独立
 
 
 def render_chat_message(role: str, content: str):
     """渲染单条聊天消息（XSS 安全：过滤 javascript:/data: URI）"""
-    # 过滤危险 URI，防止钓鱼/数据外泄
-    safe_content = content.replace("javascript:", "⚠️java⚠️:").replace("data:", "⚠️data⚠️:")
+    import re
+
+    # 正则过滤所有危险 URI scheme（大小写不敏感），包括 Markdown 链接格式
+    # 匹配 [text](javascript:...) 或 ![alt](data:...) 等变体
+    DANGEROUS_PATTERNS = [
+        re.compile(r"\[([^\]]*)\]\s*\(\s*javascript:", re.IGNORECASE),
+        re.compile(r"\[([^\]]*)\]\s*\(\s*vbscript:", re.IGNORECASE),
+        re.compile(r"\[([^\]]*)\]\s*\(\s*data:", re.IGNORECASE),
+        re.compile(r"\[([^\]]*)\]\s*\(\s*file:", re.IGNORECASE),
+        re.compile(r"!\[([^\]]*)\]\s*\(\s*javascript:", re.IGNORECASE),
+        re.compile(r"!\[([^\]]*)\]\s*\(\s*data:", re.IGNORECASE),
+        re.compile(r"(?<![a-zA-Z])javascript\s*:", re.IGNORECASE),
+        re.compile(r"(?<![a-zA-Z])vbscript\s*:", re.IGNORECASE),
+        re.compile(r"(?<![a-zA-Z])data\s*:", re.IGNORECASE),
+    ]
+
+    def _sanitize(text: str) -> str:
+        for pattern in DANGEROUS_PATTERNS:
+            text = pattern.sub(r"\1[⚠️链接已屏蔽]", text)
+        return text
+
+    safe_content = _sanitize(content)
     if role == "user":
         with st.chat_message("user", avatar="🧑"):
             st.text(safe_content)  # 用户输入用 text() 渲染，完全不解析 HTML/MD
@@ -248,7 +271,7 @@ def main():
 
         with st.spinner("小帮正在思考..."):
             try:
-                reply = chat(st.session_state.agent, user_input)
+                reply = chat(st.session_state.agent, user_input, thread_id=st.session_state.thread_id)
             except Exception:
                 _logger.exception("Chat failed for user input")
                 reply = "抱歉，出了点问题，请稍后再试，或输入「转人工」联系客服。"

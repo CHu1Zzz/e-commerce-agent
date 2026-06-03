@@ -18,6 +18,15 @@ class PIIScrubber:
     def __init__(self):
         self._patterns = self._build_patterns()
 
+    @staticmethod
+    def _mask_email(local_part: str) -> str:
+        """对邮箱本地部分脱敏，保留首尾各1字符，中间用*替代"""
+        if len(local_part) <= 2:
+            masked = "*" * len(local_part)
+        else:
+            masked = local_part[0] + "*" * (len(local_part) - 2) + local_part[-1]
+        return f"{masked}@***"
+
     def _build_patterns(self) -> dict[str, list[tuple[str, bool]]]:
         """构建脱敏正则模式
         Returns: list of (pattern, is_reversible)
@@ -95,10 +104,10 @@ class PIIScrubber:
             result,
         )
 
-        # 邮箱脱敏（ possessive-like：前缀3字符 + @ + 域名头3 + TLD）
+        # 邮箱脱敏（兼容 a@b.io、user@example.co.uk 等各种格式）
         result = re.sub(
-            r"([a-zA-Z0-9._%+-]{3})[a-zA-Z0-9._%-]+@([a-zA-Z0-9.-]{1,3})\.[a-zA-Z]{2,}",
-            lambda m: f"{m.group(1)}***@{m.group(2)[:3]}***",
+            r"([a-zA-Z0-9._%+-]{1,50})@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+            lambda m: self._mask_email(m.group(1)),
             result,
         )
 

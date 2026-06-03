@@ -53,23 +53,42 @@ SHOES_SIZE_CHART = [
 def _recommend_tshirt_size(height_cm: float, chest_cm: Optional[float] = None) -> str:
     """根据身高（和胸围）推荐T恤尺码"""
     size = "M"  # 默认
-    for h_min, c_min, size_label in TSHIRT_SIZE_CHART:
-        if height_cm >= h_min:
-            size = size_label
-            # 如果提供了胸围，进一步精确匹配
-            if chest_cm and chest_cm >= c_min:
+
+    if chest_cm is not None:
+        # 精确匹配：同时满足身高和胸围的下限，取第一行（最小尺码）
+        for h_min, c_min, size_label in TSHIRT_SIZE_CHART:
+            if height_cm >= h_min and chest_cm >= c_min:
                 return size_label
+        # 找不到同时满足的，降为身高匹配
+        for h_min, c_min, size_label in TSHIRT_SIZE_CHART:
+            if height_cm >= h_min:
+                return size_label
+    else:
+        # 无胸围时仅按身高，取最后一行（最大尺码）
+        for h_min, c_min, size_label in TSHIRT_SIZE_CHART:
+            if height_cm >= h_min:
+                size = size_label
     return size
 
 
 def _recommend_pants_size(height_cm: float, waist_cm: Optional[float] = None) -> str:
     """根据身高（和腰围）推荐裤子尺码"""
     size = "L"  # 默认
-    for h_min, w_min, size_label in PANTS_SIZE_CHART:
-        if height_cm >= h_min:
-            size = size_label
-            if waist_cm and waist_cm >= w_min:
+
+    if waist_cm is not None:
+        # 精确匹配：同时满足身高和腰围的下限，取第一行
+        for h_min, w_min, size_label in PANTS_SIZE_CHART:
+            if height_cm >= h_min and waist_cm >= w_min:
                 return size_label
+        # 降为身高匹配
+        for h_min, w_min, size_label in PANTS_SIZE_CHART:
+            if height_cm >= h_min:
+                return size_label
+    else:
+        # 无腰围时仅按身高，取最后一行
+        for h_min, w_min, size_label in PANTS_SIZE_CHART:
+            if height_cm >= h_min:
+                size = size_label
     return size
 
 

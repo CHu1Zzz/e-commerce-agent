@@ -78,7 +78,12 @@ def submit_return_request(
 
     # 校验订单状态：只有已签收的订单可以退换
     if order["status"] != "delivered":
-        status_map = {"pending": "待发货", "shipped": "已发货", "cancelled": "已取消"}
+        status_map = {
+            "pending": "待发货",
+            "shipped": "已发货",
+            "returning": "退货中",
+            "cancelled": "已取消",
+        }
         status_cn = status_map.get(order["status"], order["status"])
         return f"订单 {order_id} 当前状态为「{status_cn}」，仅已签收的订单可申请退换货。"
 
@@ -90,7 +95,7 @@ def submit_return_request(
     if days_passed > RETURN_WINDOW_DAYS:
         return f"订单 {order_id} 已签收超过 {RETURN_WINDOW_DAYS} 天，超出退换货时效，无法申请。"
 
-    # 生成工单（ID 在锁内生成，防止并发碰撞）
+    # 生成工单（整个ID生成+写入在锁内完成，防止并发碰撞）
     with _ticket_lock:
         existing_tickets = []
         if TICKETS_FILE.exists():
@@ -99,16 +104,23 @@ def submit_return_request(
         ticket_seq = len(existing_tickets) + 1
         ticket_id = f"RTN-{datetime.now().strftime('%Y%m%d')}-{ticket_seq:03d}"
 
-    ticket = {
-        "ticket_id": ticket_id,
-        "order_id": order_id,
-        "type": return_type,
-        "reason": reason,
-        "status": "pending",
-        "created_at": datetime.now().isoformat(),
-        "return_address": "上海市闵行区退货仓（七宝镇xx路xx号）",
-    }
-    _save_ticket(ticket)
+        ticket = {
+            "ticket_id": ticket_id,
+            "order_id": order_id,
+            "type": return_type,
+            "reason": reason,
+            "status": "pending",
+            "created_at": datetime.now().isoformat(),
+            "return_address": "上海市闵行区退货仓（七宝镇xx路xx号）",
+        }
+        # PII脱敏在锁内完成，确保reason写入前已处理
+        scrubber = PIIScrubber()
+        if ticket.get("reason"):
+            ticket["reason"] = scrubber.redact(ticket["reason"])
+        existing_tickets.append(ticket)
+        with open(TICKETS_FILE, "w", encoding="utf-8") as f:
+            json.dump(existing_tickets, f, ensure_ascii=False, indent=2)
+        _logger.info("Ticket saved: %s for order %s", ticket_id, order_id)
 
     type_cn = "退货" if return_type == "return" else "换货"
     items_desc = "、".join(item["name"] for item in order["items"])
